@@ -1,0 +1,37 @@
+{
+  "timestamp": "2026-02-22T18:26:18.711042",
+  "test_type": "5 new cry files (40 features)",
+  "accuracy": 0.0,
+  "results": [
+    {
+      "file": "freesound_community-babycrying2018-62503.mp3",
+      "predicted": "not-cry",
+      "confidence": 86.0,
+      "correct": false
+    },
+    {
+      "file": "freesound_community-babycry-6473.mp3",
+      "predicted": "not-cry",
+      "confidence": 88.0,
+      "correct": false
+    },
+    {
+      "file": "u_ak0pt95kqu-baby-crying-high-pitch-434113.mp3",
+      "predicted": "not-cry",
+      "confidence": 65.0,
+      "correct": false
+    },
+    {
+      "file": "zubair9900-a-small-childx27s-cry-292598.mp3",
+      "predicted": "not-cry",
+      "confidence": 83.0,
+      "correct": false
+    },
+    {
+      "file": "freesound_community-baby-crying-loud-100441.mp3",
+      "predicted": "not-cry",
+      "confidence": 71.0,
+      "correct": false
+    }
+  ]
+}

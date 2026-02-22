@@ -1,6 +1,6 @@
 Baby Cry Detection Model
 ==================================================
-Training date: 2026-02-22 17:19:50.426410
+Training date: 2026-02-22 18:38:24.222740
 Best model: RandomForestClassifier
 Features: 40
 Accuracy: 100.00%

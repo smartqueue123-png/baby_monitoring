@@ -1,0 +1,68 @@
+{
+  "timestamp": "2026-02-22T18:38:32.946644",
+  "test_type": "5 New Cry Files",
+  "total_files": 5,
+  "correct": 0,
+  "accuracy": 0.0,
+  "cry_predictions": 0,
+  "not_cry_predictions": 5,
+  "cry_percentage": 0.0,
+  "not_cry_percentage": 100.0,
+  "results": [
+    {
+      "file": "freesound_community-babycrying2018-62503.mp3",
+      "expected": "cry",
+      "predicted": "not-cry",
+      "confidence": 86.0,
+      "probabilities": {
+        "cry": "14.0%",
+        "not-cry": "86.0%"
+      },
+      "correct": false
+    },
+    {
+      "file": "freesound_community-babycry-6473.mp3",
+      "expected": "cry",
+      "predicted": "not-cry",
+      "confidence": 88.0,
+      "probabilities": {
+        "cry": "12.0%",
+        "not-cry": "88.0%"
+      },
+      "correct": false
+    },
+    {
+      "file": "u_ak0pt95kqu-baby-crying-high-pitch-434113.mp3",
+      "expected": "cry",
+      "predicted": "not-cry",
+      "confidence": 65.0,
+      "probabilities": {
+        "cry": "35.0%",
+        "not-cry": "65.0%"
+      },
+      "correct": false
+    },
+    {
+      "file": "zubair9900-a-small-childx27s-cry-292598.mp3",
+      "expected": "cry",
+      "predicted": "not-cry",
+      "confidence": 83.0,
+      "probabilities": {
+        "cry": "17.0%",
+        "not-cry": "83.0%"
+      },
+      "correct": false
+    },
+    {
+      "file": "freesound_community-baby-crying-loud-100441.mp3",
+      "expected": "cry",
+      "predicted": "not-cry",
+      "confidence": 71.0,
+      "probabilities": {
+        "cry": "29.0%",
+        "not-cry": "71.0%"
+      },
+      "correct": false
+    }
+  ]
+}
