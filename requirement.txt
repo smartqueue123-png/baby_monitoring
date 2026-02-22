@@ -1,0 +1,9 @@
+streamlit
+opencv-python
+sounddevice
+numpy
+pandas
+scikit-learn
+joblib
+mysql-connector-python
+librosa
