@@ -21,7 +21,7 @@ def get_db_connection():
     return mysql.connector.connect(
         host="localhost",
         user="root",
-        password="your_password_here",  # 🔴 CHANGE THIS
+        password="root1234",  # 🔴 CHANGE THIS
         database="baby_monitor"
     )
 
