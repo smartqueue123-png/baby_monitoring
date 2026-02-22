@@ -339,20 +339,21 @@ import mysql.connector
 from cry_infer import audio_to_features
 
 # ============================================
-# NEW: Import Baby State Detector
+# UNSUPERVISED LEARNING: Baby State Detector
 # ============================================
 class BabyStateDetector:
-    """Real-time baby state detection using unsupervised learning"""
+    """UNSUPERVISED LEARNING: Discovers baby states without labels"""
     
     def __init__(self):
-        # Load your trained model
+        # Load your trained unsupervised model
         try:
             model_data = joblib.load('baby_state_model.pkl')
             self.kmeans = model_data['kmeans']
             self.state_names = model_data['state_names']
-            print("✅ Unsupervised baby state model loaded")
+            print("✅ UNSUPERVISED MODEL LOADED: K-Means clustering")
+            print(f"   Discovered states: {list(self.state_names.values())}")
         except Exception as e:
-            print(f"⚠️ Using fallback rules: {e}")
+            print(f"⚠️ Unsupervised model not found, using fallback: {e}")
             self.kmeans = None
             self.state_names = {
                 0: "😴 Deep Sleep",
@@ -361,7 +362,7 @@ class BabyStateDetector:
             }
     
     def extract_movement_features(self, frame, prev_frame):
-        """Extract movement features from video frames"""
+        """Extract movement features for unsupervised clustering"""
         if prev_frame is None:
             return [0, 0, 0, 0]
         
@@ -385,30 +386,112 @@ class BabyStateDetector:
         return [mean_movement, std_movement, max_movement, movement_range]
     
     def detect_state(self, frame, prev_frame):
-        """Detect current baby state from video frame"""
+        """UNSUPERVISED: Predict baby state using K-Means clustering"""
         # Extract features
         features = self.extract_movement_features(frame, prev_frame)
         
         if self.kmeans:
-            # Use ML model
+            # Use unsupervised ML model
             cluster = self.kmeans.predict([features])[0]
             state = self.state_names.get(cluster, f"State {cluster}")
             
-            # Get confidence
+            # Get confidence (distance to cluster center)
             distances = np.linalg.norm(
                 self.kmeans.cluster_centers_ - features, axis=1
             )
             confidence = 1 - (distances[cluster] / (np.sum(distances) + 0.001))
             
-            return state, confidence, features
+            return state, confidence, features, cluster
         else:
             # Fallback rules
             if features[0] < 2:
-                return "😴 Deep Sleep", 0.7, features
+                return "😴 Deep Sleep", 0.7, features, 0
             elif features[0] < 5:
-                return "😊 Active & Awake", 0.6, features
+                return "😊 Active & Awake", 0.6, features, 1
             else:
-                return "😢 Intense Crying", 0.8, features
+                return "😢 Intense Crying", 0.8, features, 2
+
+# ============================================
+# SUPERVISED LEARNING: Cry Detection Classifier
+# ============================================
+class CryDetector:
+    """SUPERVISED LEARNING: Binary classification (cry vs not-cry)"""
+    
+    def __init__(self):
+        try:
+            self.model = joblib.load("cry_model.pkl")
+            print("✅ SUPERVISED MODEL LOADED: Random Forest Classifier")
+            print("   Trained on 77 cry + 60 not-cry samples")
+        except Exception as e:
+            print(f"❌ Supervised model not found: {e}")
+            self.model = None
+    
+    def detect_cry(self, audio, fs):
+        """SUPERVISED: Predict if audio contains crying"""
+        try:
+            if audio is None or len(audio) == 0 or np.all(audio == 0):
+                return 0.0, False
+            
+            # Extract features
+            feats = audio_to_features(audio, fs)
+            
+            if len(feats.shape) == 1:
+                feats = feats.reshape(1, -1)
+            
+            if hasattr(self.model, 'predict_proba'):
+                prob = self.model.predict_proba(feats)[0]
+                if len(prob) > 1:
+                    cry_prob = float(prob[1])  # Probability of positive class
+                else:
+                    cry_prob = float(prob[0])
+            else:
+                cry_prob = float(self.model.decision_function(feats)[0])
+                cry_prob = 1.0 / (1.0 + np.exp(-cry_prob))
+            
+            is_cry = cry_prob >= 0.80
+            
+            return cry_prob, is_cry
+            
+        except Exception as e:
+            print(f"Cry detection error: {e}")
+            return 0.0, False
+
+# ============================================
+# UNSUPERVISED LEARNING: Anomaly Detection
+# ============================================
+class AnomalyDetector:
+    """UNSUPERVISED LEARNING: IsolationForest for anomaly detection"""
+    
+    def __init__(self):
+        try:
+            self.model = joblib.load("baby_model.pkl")
+            print("✅ UNSUPERVISED ANOMALY MODEL LOADED: IsolationForest")
+        except Exception as e:
+            print(f"❌ Anomaly model not found: {e}")
+            self.model = None
+    
+    def detect_anomaly(self, hour, temp, sound, movement):
+        """UNSUPERVISED: Detect unusual patterns"""
+        try:
+            current_data = pd.DataFrame(
+                [[hour, temp, sound, movement]],
+                columns=["hour", "temp", "sound", "movement"]
+            )
+            
+            prediction = self.model.predict(current_data)[0]
+            
+            if hasattr(self.model, 'decision_function'):
+                anomaly_score = self.model.decision_function(current_data)[0]
+            else:
+                anomaly_score = 0.0
+            
+            is_anomaly = prediction == -1
+            
+            return anomaly_score, is_anomaly
+            
+        except Exception as e:
+            print(f"Anomaly detection error: {e}")
+            return 0.0, False
 
 # ---------------------------------
 # PAGE CONFIG
@@ -417,27 +500,53 @@ st.set_page_config(page_title="AI Baby Monitor", page_icon="👶")
 st.title("👶 Smart Baby Behavior Monitor")
 
 # ---------------------------------
+# AI TECHNIQUES OVERVIEW
+# ---------------------------------
+with st.sidebar:
+    st.header("🤖 AI Techniques Used")
+    
+    st.markdown("""
+    ### ✅ SUPERVISED LEARNING
+    - **Algorithm:** Random Forest Classifier
+    - **Purpose:** Cry detection
+    - **Training:** 137 labeled samples (77 cry, 60 not-cry)
+    - **Output:** Cry probability (0-100%)
+    
+    ### ✅ UNSUPERVISED LEARNING (Clustering)
+    - **Algorithm:** K-Means Clustering
+    - **Purpose:** Baby state discovery
+    - **Training:** 6 real YouTube videos
+    - **Discovered States:** Deep Sleep, Active & Awake, Intense Crying
+    
+    ### ✅ UNSUPERVISED LEARNING (Anomaly Detection)
+    - **Algorithm:** IsolationForest
+    - **Purpose:** Detect unusual behavior
+    - **Training:** Normal baby patterns
+    - **Output:** Anomaly score + flag
+    """)
+
+# ---------------------------------
 # MYSQL CONNECTION
 # ---------------------------------
 def get_db_connection():
     return mysql.connector.connect(
         host="localhost",
         user="root",
-        password="root1234",  # 🔴 CHANGE THIS
+        password="root1234",
         database="baby_monitor"
     )
 
-def log_to_mysql(hour, temp, sound, movement, cry_prob, anomaly_score, is_cry, is_anomaly, baby_state):
+def log_to_mysql(hour, temp, sound, movement, cry_prob, anomaly_score, is_cry, is_anomaly, baby_state, cluster_id):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Add baby_state to your table if you have it, otherwise comment out
         query = """
         INSERT INTO monitor_activity
         (hour, temperature, sound_level, movement_level,
-         cry_probability, anomaly_score, is_cry, is_anomaly, baby_state)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+         cry_probability, anomaly_score, is_cry, is_anomaly, 
+         baby_state, cluster_id)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """
         
         values = (
@@ -449,17 +558,17 @@ def log_to_mysql(hour, temp, sound, movement, cry_prob, anomaly_score, is_cry, i
             anomaly_score,
             int(is_cry),
             int(is_anomaly),
-            baby_state
+            baby_state,
+            int(cluster_id)
         )
         
         cursor.execute(query, values)
         conn.commit()
-        
         cursor.close()
         conn.close()
         
     except Exception as e:
-        # If baby_state column doesn't exist, log without it
+        # Fallback if columns don't exist
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -478,24 +587,106 @@ def log_to_mysql(hour, temp, sound, movement, cry_prob, anomaly_score, is_cry, i
             st.error(f"MySQL Error: {e2}")
 
 # ---------------------------------
-# LOAD MODELS
+# INITIALIZE ALL AI MODELS
 # ---------------------------------
-try:
-    anomaly_model = joblib.load("baby_model.pkl")
-    cry_model = joblib.load("cry_model.pkl")
-    st.success("✅ Models loaded successfully")
-except Exception as e:
-    st.error(f"❌ Model files not found: {e}")
-    st.stop()
+st.sidebar.markdown("---")
+st.sidebar.subheader("📊 Model Status")
+
+# Initialize all detectors
+state_detector = BabyStateDetector()
+cry_detector = CryDetector()
+anomaly_detector = AnomalyDetector()
+
+# Show status in sidebar
+if state_detector.kmeans:
+    st.sidebar.success("✅ Unsupervised (Clustering): Ready")
+else:
+    st.sidebar.warning("⚠️ Unsupervised (Clustering): Fallback")
+
+if cry_detector.model:
+    st.sidebar.success("✅ Supervised (Classification): Ready")
+else:
+    st.sidebar.error("❌ Supervised (Classification): Missing")
+
+if anomaly_detector.model:
+    st.sidebar.success("✅ Unsupervised (Anomaly): Ready")
+else:
+    st.sidebar.warning("⚠️ Unsupervised (Anomaly): Fallback")
 
 # ---------------------------------
-# NEW: Initialize Baby State Detector
+# UI CONTROLS
 # ---------------------------------
-state_detector = BabyStateDetector()
-if state_detector.kmeans:
-    st.sidebar.success("✅ Baby state detection ready")
-else:
-    st.sidebar.warning("⚠️ Using fallback state detection")
+col1, col2 = st.columns(2)
+
+with col1:
+    temp_sim = st.slider("Simulated Temperature (°C)", 18, 35, 22)
+
+with col2:
+    status_box = st.empty()
+
+# Audio test section
+with st.expander("Audio Test"):
+    if st.button("Test Microphone"):
+        with st.spinner("Recording for 2 seconds..."):
+            fs = 44100
+            recording = sd.rec(int(2.0 * fs), samplerate=fs, channels=1, dtype='float32', device=1)
+            sd.wait()
+            audio = recording.flatten()
+            rms = np.sqrt(np.mean(audio**2))
+            test_level = float(min(rms * 2000, 100.0))
+            st.write(f"Audio level: {test_level:.2f}/100")
+            if test_level > 10:
+                st.success("✅ Microphone working!")
+            else:
+                st.warning("⚠ Low audio level - try speaking louder")
+
+# Start/Stop buttons
+if "run" not in st.session_state:
+    st.session_state.run = False
+
+col_start, col_stop = st.columns(2)
+with col_start:
+    if st.button("▶ Start Monitoring"):
+        st.session_state.run = True
+
+with col_stop:
+    if st.button("⏹ Stop"):
+        st.session_state.run = False
+
+# Create charts
+sound_chart = st.line_chart(np.zeros((1, 1)), use_container_width=True)
+move_chart = st.line_chart(np.zeros((1, 1)), use_container_width=True)
+
+# Metrics display
+col_metrics1, col_metrics2, col_metrics3, col_metrics4 = st.columns(4)
+with col_metrics1:
+    sound_metric = st.empty()
+with col_metrics2:
+    cry_metric = st.empty()
+with col_metrics3:
+    anomaly_metric = st.empty()
+with col_metrics4:
+    state_metric = st.empty()
+
+# ---------------------------------
+# CAMERA INITIALIZATION
+# ---------------------------------
+cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+
+if not cap.isOpened():
+    st.error("❌ Webcam not detected.")
+    st.stop()
+
+time.sleep(1)
+
+ret, prev_frame = cap.read()
+
+if not ret or prev_frame is None:
+    st.error("❌ Failed to read from webcam.")
+    st.stop()
+
+prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
+prev_frame_state = prev_frame.copy()
 
 # ---------------------------------
 # AUDIO FUNCTION
@@ -520,120 +711,17 @@ def get_mic_audio_and_score():
         return np.zeros(int(2.0 * 44100)), 44100, 0.0
 
 # ---------------------------------
-# CRY DETECTION FUNCTION
-# ---------------------------------
-def detect_cry(audio, fs):
-    try:
-        if audio is None or len(audio) == 0 or np.all(audio == 0):
-            return 0.0, False
-        
-        feats = audio_to_features(audio, fs)
-        
-        if len(feats.shape) == 1:
-            feats = feats.reshape(1, -1)
-        
-        if hasattr(cry_model, 'predict_proba'):
-            prob = cry_model.predict_proba(feats)[0]
-            if len(prob) > 1:
-                cry_prob = float(prob[1])
-            else:
-                cry_prob = float(prob[0])
-        else:
-            cry_prob = float(cry_model.decision_function(feats)[0])
-            cry_prob = 1.0 / (1.0 + np.exp(-cry_prob))
-        
-        is_cry = cry_prob >= 0.80
-        
-        return cry_prob, is_cry
-        
-    except Exception as e:
-        print(f"Cry detection error: {e}")
-        return 0.0, False
-
-# ---------------------------------
-# UI CONTROLS
-# ---------------------------------
-col1, col2 = st.columns(2)
-
-with col1:
-    temp_sim = st.slider("Simulated Temperature (°C)", 18, 35, 22)
-
-with col2:
-    status_box = st.empty()
-
-# Add audio test section
-with st.expander("Audio Test"):
-    if st.button("Test Microphone"):
-        with st.spinner("Recording for 2 seconds..."):
-            test_audio, test_fs, test_level = get_mic_audio_and_score()
-            st.write(f"Audio level: {test_level:.2f}/100")
-            if test_level > 10:
-                st.success("✅ Microphone working!")
-            else:
-                st.warning("⚠ Low audio level - try speaking louder")
-
-if "run" not in st.session_state:
-    st.session_state.run = False
-
-col_start, col_stop = st.columns(2)
-with col_start:
-    if st.button("▶ Start Monitoring"):
-        st.session_state.run = True
-
-with col_stop:
-    if st.button("⏹ Stop"):
-        st.session_state.run = False
-
-# Create charts
-sound_chart = st.line_chart(np.zeros((1, 1)), use_container_width=True)
-move_chart = st.line_chart(np.zeros((1, 1)), use_container_width=True)
-
-# Add metrics display
-col_metrics1, col_metrics2, col_metrics3, col_metrics4 = st.columns(4)
-with col_metrics1:
-    sound_metric = st.empty()
-with col_metrics2:
-    cry_metric = st.empty()
-with col_metrics3:
-    anomaly_metric = st.empty()
-with col_metrics4:
-    state_metric = st.empty()
-
-# ---------------------------------
-# SAFE CAMERA INITIALIZATION
-# ---------------------------------
-cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-
-if not cap.isOpened():
-    st.error("❌ Webcam not detected.")
-    st.stop()
-
-time.sleep(1)
-
-ret, prev_frame = cap.read()
-
-if not ret or prev_frame is None:
-    st.error("❌ Failed to read from webcam.")
-    st.stop()
-
-prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
-
-# NEW: Store previous frame for state detection
-prev_frame_state = prev_frame.copy()
-
-# ---------------------------------
 # MAIN LOOP
 # ---------------------------------
 if st.session_state.run:
     st.info("🟢 Monitoring active...")
     
-    # Initialize charts with empty data
+    # Initialize history
     sound_history = []
     move_history = []
-    state_history = []
     
     while st.session_state.run:
-        # -------- CAMERA MOTION DETECTION --------
+        # -------- VIDEO PROCESSING --------
         ret, frame = cap.read()
         if not ret or frame is None:
             st.warning("⚠ Webcam frame not received.")
@@ -644,37 +732,23 @@ if st.session_state.run:
         move_score = float(np.mean(frame_diff))
         prev_gray = gray
         
-        # -------- NEW: BABY STATE DETECTION --------
-        baby_state, state_confidence, movement_features = state_detector.detect_state(
+        # -------- UNSUPERVISED: BABY STATE DETECTION (Clustering) --------
+        baby_state, state_confidence, movement_features, cluster_id = state_detector.detect_state(
             frame, prev_frame_state
         )
         prev_frame_state = frame.copy()
         
-        # -------- MICROPHONE AUDIO CAPTURE --------
+        # -------- AUDIO PROCESSING --------
         audio, audio_fs, sound_score = get_mic_audio_and_score()
         
-        # -------- CRY DETECTION --------
-        cry_prob, is_cry = detect_cry(audio, audio_fs)
+        # -------- SUPERVISED: CRY DETECTION (Classification) --------
+        cry_prob, is_cry = cry_detector.detect_cry(audio, audio_fs)
         
-        # -------- ANOMALY DETECTION --------
+        # -------- UNSUPERVISED: ANOMALY DETECTION --------
         hour_now = time.localtime().tm_hour
-        
-        current_data = pd.DataFrame(
-            [[hour_now, temp_sim, sound_score, move_score]],
-            columns=["hour", "temp", "sound", "movement"]
+        anomaly_score, is_anomaly = anomaly_detector.detect_anomaly(
+            hour_now, temp_sim, sound_score, move_score
         )
-        
-        try:
-            prediction = anomaly_model.predict(current_data)[0]
-            if hasattr(anomaly_model, 'decision_function'):
-                anomaly_score = anomaly_model.decision_function(current_data)[0]
-            else:
-                anomaly_score = 0.0
-            is_anomaly = prediction == -1
-        except Exception as e:
-            print(f"Anomaly detection error: {e}")
-            anomaly_score = 0.0
-            is_anomaly = False
         
         # -------- UPDATE METRICS --------
         sound_metric.metric("Sound Level", f"{sound_score:.1f}/100")
@@ -682,48 +756,53 @@ if st.session_state.run:
         anomaly_metric.metric("Anomaly Score", f"{anomaly_score:.2f}")
         state_metric.metric("Baby State", baby_state, delta=None)
         
+        # -------- AI TECHNIQUE SUMMARY --------
+        with st.sidebar:
+            st.markdown("---")
+            st.subheader("🎯 Current Predictions")
+            
+            # Supervised
+            st.markdown("**🔵 SUPERVISED:**")
+            if is_cry:
+                st.warning(f"👶 Cry Detected ({cry_prob*100:.1f}%)")
+            else:
+                st.success(f"✅ No Cry ({cry_prob*100:.1f}%)")
+            
+            # Unsupervised - Clustering
+            st.markdown("**🟢 UNSUPERVISED (Clustering):**")
+            st.info(f"{baby_state}")
+            st.progress(state_confidence)
+            st.caption(f"Confidence: {state_confidence:.1%} | Cluster: {cluster_id}")
+            
+            # Unsupervised - Anomaly
+            st.markdown("**🟠 UNSUPERVISED (Anomaly):**")
+            if is_anomaly:
+                st.error(f"⚠️ Anomaly Detected (Score: {anomaly_score:.2f})")
+            else:
+                st.success(f"✅ Normal Pattern (Score: {anomaly_score:.2f})")
+        
         # -------- DECISION DISPLAY --------
         if is_anomaly and is_cry:
-            status_box.error(f"🚨 HIGH RISK: {baby_state} + Abnormal")
+            status_box.error(f"🚨 HIGH RISK: {baby_state} + Abnormal Pattern")
         elif is_cry:
             status_box.warning(f"👶 {baby_state} - Cry Detected")
         elif is_anomaly:
-            status_box.error(f"🚨 Abnormal Behavior - {baby_state}")
+            status_box.error(f"🚨 Abnormal Pattern - {baby_state}")
         else:
             status_box.success(f"✅ {baby_state}")
-        
-        # Show state confidence in expander
-        with st.sidebar:
-            st.markdown("---")
-            st.subheader("👶 State Details")
-            st.markdown(f"### {baby_state}")
-            st.progress(state_confidence)
-            st.caption(f"Confidence: {state_confidence:.1%}")
-            
-            with st.expander("Movement Features"):
-                st.write(f"Mean: {movement_features[0]:.2f}")
-                st.write(f"Std: {movement_features[1]:.2f}")
-                st.write(f"Max: {movement_features[2]:.2f}")
-                st.write(f"Range: {movement_features[3]:.2f}")
         
         # -------- UPDATE CHARTS --------
         sound_history.append(sound_score)
         move_history.append(move_score)
-        state_history.append(baby_state)
         
         if len(sound_history) > 50:
             sound_history.pop(0)
             move_history.pop(0)
-            state_history.pop(0)
         
-        # Update line charts
-        sound_df = pd.DataFrame(sound_history, columns=["Sound Level"])
-        move_df = pd.DataFrame(move_history, columns=["Movement"])
+        sound_chart.line_chart(pd.DataFrame(sound_history, columns=["Sound Level"]))
+        move_chart.line_chart(pd.DataFrame(move_history, columns=["Movement"]))
         
-        sound_chart.line_chart(sound_df)
-        move_chart.line_chart(move_df)
-        
-        # -------- STORE TO MYSQL --------
+        # -------- LOG TO DATABASE --------
         log_to_mysql(
             hour_now,
             temp_sim,
@@ -733,10 +812,10 @@ if st.session_state.run:
             anomaly_score,
             is_cry,
             is_anomaly,
-            baby_state
+            baby_state,
+            cluster_id
         )
         
-        # Small sleep to prevent overwhelming
         time.sleep(0.1)
 
 # ---------------------------------
