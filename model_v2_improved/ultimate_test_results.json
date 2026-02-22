@@ -1,0 +1,80 @@
+{
+  "timestamp": "2026-02-22T18:07:47.481306",
+  "accuracy": 100.0,
+  "cry_accuracy": 100.0,
+  "not_cry_accuracy": 100.0,
+  "total_files": 10,
+  "correct_files": 10,
+  "results": [
+    {
+      "file": "freesound_community-01-baby-crying-hard-90133.mp3",
+      "expected": "cry",
+      "predicted": "cry",
+      "confidence": 62.0,
+      "correct": true
+    },
+    {
+      "file": "freesound_community-baby-2-months-happy-squealing-squeaky-toy-summer-04-62171.mp3",
+      "expected": "not-cry",
+      "predicted": "not-cry",
+      "confidence": 85.0,
+      "correct": true
+    },
+    {
+      "file": "freesound_community-baby-girl-making-sounds-16863.mp3",
+      "expected": "not-cry",
+      "predicted": "not-cry",
+      "confidence": 82.0,
+      "correct": true
+    },
+    {
+      "file": "freesound_community-babylach-78931.mp3",
+      "expected": "not-cry",
+      "predicted": "not-cry",
+      "confidence": 87.0,
+      "correct": true
+    },
+    {
+      "file": "freesound_community-caleb-gurgle2-31346.mp3",
+      "expected": "not-cry",
+      "predicted": "not-cry",
+      "confidence": 92.0,
+      "correct": true
+    },
+    {
+      "file": "freesound_community-newborn-baby-crying-70909.mp3",
+      "expected": "cry",
+      "predicted": "cry",
+      "confidence": 56.99999999999999,
+      "correct": true
+    },
+    {
+      "file": "jodywhiteley-baby-laugh-giggle-119650.mp3",
+      "expected": "not-cry",
+      "predicted": "not-cry",
+      "confidence": 94.0,
+      "correct": true
+    },
+    {
+      "file": "magiaz-baby-cry-447522.mp3",
+      "expected": "cry",
+      "predicted": "cry",
+      "confidence": 80.0,
+      "correct": true
+    },
+    {
+      "file": "magiaz-baby-crying1-327496.mp3",
+      "expected": "cry",
+      "predicted": "cry",
+      "confidence": 62.0,
+      "correct": true
+    },
+    {
+      "file": "pataponai-babypon-laughing-343959.mp3",
+      "expected": "not-cry",
+      "predicted": "not-cry",
+      "confidence": 98.0,
+      "correct": true
+    }
+  ]
+}
