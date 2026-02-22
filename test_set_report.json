@@ -1,0 +1,175 @@
+{
+  "timestamp": "2026-02-22T17:44:24.822559",
+  "total_files": 13,
+  "known_files": 13,
+  "accuracy": 76.92307692307693,
+  "average_confidence": 81.53846153846153,
+  "per_category": {
+    "cry": {
+      "total": 7,
+      "correct": 4
+    },
+    "not-cry": {
+      "total": 6,
+      "correct": 6
+    }
+  },
+  "results": [
+    {
+      "file": "freesound_community-01-baby-crying-hard-90133.mp3",
+      "predicted": "cry",
+      "confidence": 68.0,
+      "all_probabilities": {
+        "cry": 68.0,
+        "not-cry": 32.0
+      },
+      "duration": 10.9,
+      "expected": "cry",
+      "correct": true
+    },
+    {
+      "file": "freesound_community-baby-2-months-happy-squealing-squeaky-toy-summer-04-62171.mp3",
+      "predicted": "not-cry",
+      "confidence": 87.0,
+      "all_probabilities": {
+        "cry": 13.0,
+        "not-cry": 87.0
+      },
+      "duration": 60.17,
+      "expected": "not-cry",
+      "correct": true
+    },
+    {
+      "file": "freesound_community-baby-girl-making-sounds-16863.mp3",
+      "predicted": "not-cry",
+      "confidence": 85.0,
+      "all_probabilities": {
+        "cry": 15.0,
+        "not-cry": 85.0
+      },
+      "duration": 161.06,
+      "expected": "not-cry",
+      "correct": true
+    },
+    {
+      "file": "freesound_community-babylach-78931.mp3",
+      "predicted": "not-cry",
+      "confidence": 93.0,
+      "all_probabilities": {
+        "cry": 7.000000000000001,
+        "not-cry": 93.0
+      },
+      "duration": 13.69,
+      "expected": "not-cry",
+      "correct": true
+    },
+    {
+      "file": "freesound_community-caleb-gurgle2-31346.mp3",
+      "predicted": "not-cry",
+      "confidence": 96.0,
+      "all_probabilities": {
+        "cry": 4.0,
+        "not-cry": 96.0
+      },
+      "duration": 45.65,
+      "expected": "not-cry",
+      "correct": true
+    },
+    {
+      "file": "freesound_community-moaning-baby-for-freesound-33342.mp3",
+      "predicted": "not-cry",
+      "confidence": 68.0,
+      "all_probabilities": {
+        "cry": 32.0,
+        "not-cry": 68.0
+      },
+      "duration": 17.42,
+      "expected": "cry",
+      "correct": false
+    },
+    {
+      "file": "freesound_community-newborn-baby-crying-70909.mp3",
+      "predicted": "cry",
+      "confidence": 56.00000000000001,
+      "all_probabilities": {
+        "cry": 56.00000000000001,
+        "not-cry": 44.0
+      },
+      "duration": 18.42,
+      "expected": "cry",
+      "correct": true
+    },
+    {
+      "file": "jodywhiteley-baby-laugh-giggle-119650.mp3",
+      "predicted": "not-cry",
+      "confidence": 96.0,
+      "all_probabilities": {
+        "cry": 4.0,
+        "not-cry": 96.0
+      },
+      "duration": 20.14,
+      "expected": "not-cry",
+      "correct": true
+    },
+    {
+      "file": "magiaz-baby-cry-447522.mp3",
+      "predicted": "cry",
+      "confidence": 80.0,
+      "all_probabilities": {
+        "cry": 80.0,
+        "not-cry": 20.0
+      },
+      "duration": 5.09,
+      "expected": "cry",
+      "correct": true
+    },
+    {
+      "file": "magiaz-baby-crying1-327496.mp3",
+      "predicted": "cry",
+      "confidence": 62.0,
+      "all_probabilities": {
+        "cry": 62.0,
+        "not-cry": 38.0
+      },
+      "duration": 5.04,
+      "expected": "cry",
+      "correct": true
+    },
+    {
+      "file": "nematoki-little-baby-crying-newborn-infant-cries-317180.mp3",
+      "predicted": "not-cry",
+      "confidence": 90.0,
+      "all_probabilities": {
+        "cry": 10.0,
+        "not-cry": 90.0
+      },
+      "duration": 47.71,
+      "expected": "cry",
+      "correct": false
+    },
+    {
+      "file": "pataponai-babypon-laughing-343959.mp3",
+      "predicted": "not-cry",
+      "confidence": 99.0,
+      "all_probabilities": {
+        "cry": 1.0,
+        "not-cry": 99.0
+      },
+      "duration": 22.07,
+      "expected": "not-cry",
+      "correct": true
+    },
+    {
+      "file": "u_xg7ssi08yr-baby-cry2-355132.mp3",
+      "predicted": "not-cry",
+      "confidence": 80.0,
+      "all_probabilities": {
+        "cry": 20.0,
+        "not-cry": 80.0
+      },
+      "duration": 22.44,
+      "expected": "cry",
+      "correct": false
+    }
+  ]
+}

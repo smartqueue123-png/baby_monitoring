@@ -1,0 +1,10 @@
+Baby Cry Detection Model
+==================================================
+Training date: 2026-02-22 17:19:50.426410
+Best model: RandomForestClassifier
+Features: 40
+Accuracy: 100.00%
+
+Class distribution:
+  Random Forest: 100.00%
+  SVM (RBF): 100.00%
