@@ -337,6 +337,158 @@ import mysql.connector
 from cry_infer import audio_to_features
 import matplotlib.pyplot as plt
 from collections import deque
+import requests
+from dotenv import load_dotoad_dotenv
+import os
+
+# Load environment variables
+load_dotenv()
+
+# ============================================
+# INPUT VALIDATION FUNCTION (NEW - ADD THIS)
+# ============================================
+def validate_and_sanitize(value, value_type, min_val=None, max_val=None, default=None):
+    """
+    Safely validate and sanitize input values
+    - value: the input to validate
+    - value_type: 'int', 'float', or 'str'
+    - min_val: minimum allowed value
+    - max_val: maximum allowed value
+    - default: return this if validation fails
+    """
+    try:
+        # Handle None values
+        if value is None:
+            return default if default is not None else (0 if value_type in ['int', 'float'] else '')
+        
+        # Convert to correct type
+        if value_type == 'int':
+            val = int(float(value))  # Handle strings that look like numbers
+        elif value_type == 'float':
+            val = float(value)
+        else:  # string
+            val = str(value).strip()
+            # Remove any potentially dangerous characters (allow only printable chars)
+            val = ''.join(char for char in val if char.isprintable() and ord(char) < 128)
+            return val[:255]  # Limit length to prevent buffer overflow
+        
+        # Check range for numbers
+        if min_val is not None and val < min_val:
+            print(f"⚠️ Value {val} below minimum {min_val}, using minimum")
+            return min_val
+        if max_val is not None and val > max_val:
+            print(f"⚠️ Value {val} above maximum {max_val}, using maximum")
+            return max_val
+            
+        return val
+        
+    except (ValueError, TypeError) as e:
+        print(f"⚠️ Validation failed for {value}: {e}")
+        return default if default is not None else (0 if value_type in ['int', 'float'] else '')
+
+# ============================================
+# SECURE DATABASE CONNECTION (UPDATED)
+# ============================================
+def get_db_connection():
+    """Get database connection using environment variables"""
+    try:
+        conn = mysql.connector.connect(
+            host=os.getenv('DB_HOST', 'localhost'),
+            user=os.getenv('DB_USER', 'root'),
+            password=os.getenv('DB_PASSWORD', 'root1234'),  # Fallback only for development
+            database=os.getenv('DB_NAME', 'baby_monitor')
+        )
+        return conn
+    except mysql.connector.Error as e:
+        st.error(f"Database connection failed: {e}")
+        return None
+
+# ============================================
+# SECURE LOGGING FUNCTION (UPDATED with validation + SQL injection protection)
+# ============================================
+def log_to_mysql(hour, temp, sound, movement, cry_prob, anomaly_result, is_cry):
+    """Log monitoring data to database with validation and SQL injection protection"""
+    try:
+        # VALIDATE ALL INPUTS FIRST
+        hour = validate_and_sanitize(hour, 'int', 0, 23, 0)
+        temp = validate_and_sanitize(temp, 'float', 18, 35, 22)
+        sound = validate_and_sanitize(sound, 'float', 0, 100, 0)
+        movement = validate_and_sanitize(movement, 'float', 0, 255, 0)
+        cry_prob = validate_and_sanitize(cry_prob, 'float', 0, 1, 0)
+        
+        # Validate anomaly_result dictionary
+        if anomaly_result is None:
+            anomaly_result = {'score': 0, 'is_anomaly': False, 'explanations': [], 'severity': 'low'}
+        
+        anomaly_score = validate_and_sanitize(anomaly_result.get('score', 0), 'float', -10, 10, 0)
+        is_anomaly = 1 if anomaly_result.get('is_anomaly', False) else 0
+        is_cry_int = 1 if is_cry else 0
+        
+        # Sanitize explanations string
+        explanations = anomaly_result.get('explanations', [])
+        if isinstance(explanations, list):
+            explanations_str = ', '.join([str(e)[:100] for e in explanations])[:255]
+        else:
+            explanations_str = str(explanations)[:255]
+        
+        severity = validate_and_sanitize(anomaly_result.get('severity', 'low'), 'str')
+        if severity not in ['low', 'medium', 'high']:
+            severity = 'low'
+        
+        # Connect to database
+        conn = get_db_connection()
+        if conn is None:
+            return
+            
+        cursor = conn.cursor()
+        
+        # Check if new columns exist
+        cursor.execute("SHOW COLUMNS FROM monitor_activity")
+        columns = [col[0] for col in cursor.fetchall()]
+        
+        # SAFE: Using parameterized queries with %s placeholders
+        # This prevents SQL injection by escaping all values automatically
+        if 'anomaly_explanations' in columns and 'severity' in columns:
+            query = """
+            INSERT INTO monitor_activity
+            (hour, temperature, sound_level, movement_level,
+             cry_probability, anomaly_score, is_cry, is_anomaly,
+             anomaly_explanations, severity)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            values = (
+                hour, temp, sound, movement,
+                cry_prob, anomaly_score, is_cry_int, is_anomaly,
+                explanations_str, severity
+            )
+        else:
+            # Fallback to basic columns
+            query = """
+            INSERT INTO monitor_activity
+            (hour, temperature, sound_level, movement_level,
+             cry_probability, anomaly_score, is_cry, is_anomaly)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            values = (hour, temp, sound, movement, cry_prob, anomaly_score, is_cry_int, is_anomaly)
+        
+        # Execute with values tuple - this is 100% safe from SQL injection
+        cursor.execute(query, values)
+        conn.commit()
+        
+        print(f"✅ Logged to database: Hour={hour}, Sound={sound:.1f}")
+        
+    except mysql.connector.Error as e:
+        print(f"❌ Database error: {e}")
+        st.error(f"Database error: Could not save data")
+    except Exception as e:
+        print(f"❌ Unexpected error: {e}")
+        st.error("An unexpected error occurred while saving data")
+    finally:
+        # Always close connection
+        if 'cursor' in locals() and cursor:
+            cursor.close()
+        if 'conn' in locals() and conn and conn.is_connected():
+            conn.close()
 
 # ============================================
 # SUPERVISED LEARNING: Cry Detection Classifier
@@ -382,6 +534,10 @@ class CryDetector:
                 cry_prob = 1.0 / (1.0 + np.exp(-cry_prob))
                 confidence = abs(cry_prob - 0.5) * 2  # Scale to 0-1
             
+            # Validate cry_prob
+            cry_prob = validate_and_sanitize(cry_prob, 'float', 0, 1, 0)
+            confidence = validate_and_sanitize(confidence, 'float', 0, 1, 0)
+            
             is_cry = cry_prob >= 0.80
             
             return cry_prob, is_cry, confidence
@@ -412,34 +568,38 @@ class AnomalyDetector:
         """Load or create baseline statistics from database"""
         baseline = {}
         try:
+            # Use environment variables for connection
             conn = mysql.connector.connect(
-                host="localhost",
-                user="root",
-                password="root1234",
-                database="baby_monitor"
+                host=os.getenv('DB_HOST', 'localhost'),
+                user=os.getenv('DB_USER', 'root'),
+                password=os.getenv('DB_PASSWORD', 'root1234'),
+                database=os.getenv('DB_NAME', 'baby_monitor')
             )
             
-            # Try to load normal readings from database
+            # SAFE: Even with no user input, use proper query format
             query = """
             SELECT hour, sound_level, movement_level, temperature 
             FROM monitor_activity 
-            WHERE is_anomaly = 0 OR is_anomaly IS NULL
+            WHERE (is_anomaly = 0 OR is_anomaly IS NULL)
             """
+            
+            # pandas read_sql handles parameterization internally
             df = pd.read_sql(query, conn)
             conn.close()
             
-            if len(df) > 100:  # Enough data
+            # Validate dataframe
+            if df is not None and len(df) > 100:  # Enough data
                 for hour in range(24):
                     hour_data = df[df['hour'] == hour]
                     if len(hour_data) > 5:
                         baseline[hour] = {
-                            'sound_mean': hour_data['sound_level'].mean(),
-                            'sound_std': hour_data['sound_level'].std(),
-                            'sound_p95': hour_data['sound_level'].quantile(0.95),
-                            'sound_p5': hour_data['sound_level'].quantile(0.05),
-                            'movement_mean': hour_data['movement_level'].mean(),
-                            'movement_std': hour_data['movement_level'].std(),
-                            'movement_p95': hour_data['movement_level'].quantile(0.95),
+                            'sound_mean': validate_and_sanitize(hour_data['sound_level'].mean(), 'float', 0, 100, 10),
+                            'sound_std': validate_and_sanitize(hour_data['sound_level'].std(), 'float', 0, 50, 5),
+                            'sound_p95': validate_and_sanitize(hour_data['sound_level'].quantile(0.95), 'float', 0, 100, 20),
+                            'sound_p5': validate_and_sanitize(hour_data['sound_level'].quantile(0.05), 'float', 0, 100, 2),
+                            'movement_mean': validate_and_sanitize(hour_data['movement_level'].mean(), 'float', 0, 255, 5),
+                            'movement_std': validate_and_sanitize(hour_data['movement_level'].std(), 'float', 0, 100, 3),
+                            'movement_p95': validate_and_sanitize(hour_data['movement_level'].quantile(0.95), 'float', 0, 255, 12),
                         }
                     else:
                         # Fallback for hours with no data
@@ -459,6 +619,9 @@ class AnomalyDetector:
     
     def get_default_stats(self, hour):
         """Provide reasonable default stats based on time of day"""
+        # Validate hour input
+        hour = validate_and_sanitize(hour, 'int', 0, 23, 12)
+        
         # Night time (11 PM - 6 AM) should be quieter
         if 23 <= hour or hour <= 6:
             return {
@@ -483,7 +646,13 @@ class AnomalyDetector:
             }
     
     def add_reading(self, hour, temp, sound, movement):
-        """Add a reading to history"""
+        """Add a reading to history with validation"""
+        # Validate all inputs before storing
+        hour = validate_and_sanitize(hour, 'int', 0, 23, 12)
+        temp = validate_and_sanitize(temp, 'float', 18, 35, 22)
+        sound = validate_and_sanitize(sound, 'float', 0, 100, 0)
+        movement = validate_and_sanitize(movement, 'float', 0, 255, 0)
+        
         self.reading_history.append({
             'timestamp': time.time(),
             'hour': hour,
@@ -499,19 +668,30 @@ class AnomalyDetector:
         
         df = pd.DataFrame(list(self.reading_history))
         
+        # Validate the extracted features
+        hour_val = validate_and_sanitize(df['hour'].iloc[-1], 'int', 0, 23, 12)
+        temp_val = validate_and_sanitize(df['temp'].iloc[-1], 'float', 18, 35, 22)
+        sound_val = validate_and_sanitize(df['sound'].iloc[-1], 'float', 0, 100, 0)
+        movement_val = validate_and_sanitize(df['movement'].iloc[-1], 'float', 0, 255, 0)
+        
         # Use ONLY the features the model was trained with
         features = {
-            'hour': df['hour'].iloc[-1],
-            'temp': df['temp'].iloc[-1],
-            'sound': df['sound'].iloc[-1],
-            'movement': df['movement'].iloc[-1]
+            'hour': hour_val,
+            'temp': temp_val,
+            'sound': sound_val,
+            'movement': movement_val
         }
         
         return pd.DataFrame([features])
-
     
     def detect_anomaly(self, hour, temp, sound, movement):
         """Enhanced anomaly detection with explanations (FIX #3 & #4)"""
+        
+        # Validate inputs first
+        hour = validate_and_sanitize(hour, 'int', 0, 23, 12)
+        temp = validate_and_sanitize(temp, 'float', 18, 35, 22)
+        sound = validate_and_sanitize(sound, 'float', 0, 100, 0)
+        movement = validate_and_sanitize(movement, 'float', 0, 255, 0)
         
         # Add to history
         self.add_reading(hour, temp, sound, movement)
@@ -538,7 +718,7 @@ class AnomalyDetector:
                 ml_pred = self.model.predict(features)[0]
                 if hasattr(self.model, 'decision_function'):
                     ml_score = self.model.decision_function(features)[0]
-                    result['score'] = float(ml_score)
+                    result['score'] = validate_and_sanitize(ml_score, 'float', -10, 10, 0)
                 
                 if ml_pred == -1:  # -1 indicates anomaly in IsolationForest
                     anomaly_votes += 1
@@ -622,7 +802,7 @@ class AnomalyDetector:
             # Determine if it's an anomaly
             if anomaly_ratio >= 0.3:  # At least 30% of checks flagged
                 result['is_anomaly'] = True
-                result['confidence'] = min(anomaly_ratio * 1.5, 0.95)  # Scale but cap at 0.95
+                result['confidence'] = validate_and_sanitize(min(anomaly_ratio * 1.5, 0.95), 'float', 0, 1, 0)
                 
                 # Set severity
                 if anomaly_ratio >= 0.6:
@@ -634,7 +814,7 @@ class AnomalyDetector:
                 result['explanations'] = list(dict.fromkeys(explanations))
             else:
                 result['is_anomaly'] = False
-                result['confidence'] = 1 - anomaly_ratio
+                result['confidence'] = validate_and_sanitize(1 - anomaly_ratio, 'float', 0, 1, 0)
                 result['explanations'] = ["✅ All patterns normal"]
         
         return result
@@ -672,59 +852,6 @@ with st.sidebar:
     """)
 
 # ---------------------------------
-# MYSQL CONNECTION
-# ---------------------------------
-def get_db_connection():
-    return mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="root1234",
-        database="baby_monitor"
-    )
-
-def log_to_mysql(hour, temp, sound, movement, cry_prob, anomaly_result, is_cry):
-    """Log monitoring data to database"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Check if new columns exist
-        cursor.execute("SHOW COLUMNS FROM monitor_activity")
-        columns = [col[0] for col in cursor.fetchall()]
-        
-        # Build query based on available columns
-        if 'anomaly_explanations' in columns and 'severity' in columns:
-            query = """
-            INSERT INTO monitor_activity
-            (hour, temperature, sound_level, movement_level,
-             cry_probability, anomaly_score, is_cry, is_anomaly,
-             anomaly_explanations, severity)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            """
-            values = (
-                hour, temp, sound, movement,
-                cry_prob, anomaly_result['score'], int(is_cry), int(anomaly_result['is_anomaly']),
-                ', '.join(anomaly_result['explanations'])[:255], anomaly_result['severity']
-            )
-        else:
-            # Fallback to basic columns
-            query = """
-            INSERT INTO monitor_activity
-            (hour, temperature, sound_level, movement_level,
-             cry_probability, anomaly_score, is_cry, is_anomaly)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
-            """
-            values = (hour, temp, sound, movement, cry_prob, anomaly_result['score'], int(is_cry), int(anomaly_result['is_anomaly']))
-        
-        cursor.execute(query, values)
-        conn.commit()
-        cursor.close()
-        conn.close()
-        
-    except Exception as e:
-        st.error(f"MySQL Error: {e}")
-
-# ---------------------------------
 # INITIALIZE MODELS
 # ---------------------------------
 st.sidebar.markdown("---")
@@ -752,6 +879,8 @@ col1, col2, col3 = st.columns(3)
 
 with col1:
     temp_sim = st.slider("🌡️ Room Temperature (°C)", 18, 35, 22)
+    # Validate slider input (though sliders are safe, double-check)
+    temp_sim = validate_and_sanitize(temp_sim, 'float', 18, 35, 22)
 
 with col2:
     sensitivity = st.select_slider(
@@ -759,6 +888,8 @@ with col2:
         options=["Low", "Medium", "High"],
         value="Medium"
     )
+    # Validate sensitivity selection
+    sensitivity = validate_and_sanitize(sensitivity, 'str')
     # Adjust threshold based on sensitivity
     anomaly_threshold = {"Low": 0.5, "Medium": 0.3, "High": 0.15}[sensitivity]
 
@@ -775,6 +906,8 @@ with st.expander("🎤 Test Microphone"):
             audio = recording.flatten()
             rms = np.sqrt(np.mean(audio**2))
             test_level = float(min(rms * 2000, 100.0))
+            # Validate test level
+            test_level = validate_and_sanitize(test_level, 'float', 0, 100, 0)
             
             col_mic1, col_mic2 = st.columns(2)
             with col_mic1:
@@ -875,6 +1008,9 @@ def get_mic_audio_and_score():
         rms = np.sqrt(np.mean(audio**2))
         loudness = float(min(rms * 2000, 100.0))
         
+        # Validate loudness
+        loudness = validate_and_sanitize(loudness, 'float', 0, 100, 0)
+        
         return audio, fs, loudness
         
     except Exception as e:
@@ -906,6 +1042,8 @@ if st.session_state.run:
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         frame_diff = cv2.absdiff(prev_gray, gray)
         move_score = float(np.mean(frame_diff))
+        # Validate movement score
+        move_score = validate_and_sanitize(move_score, 'float', 0, 255, 0)
         prev_gray = gray
         
         # -------- AUDIO PROCESSING --------
@@ -914,7 +1052,7 @@ if st.session_state.run:
         # -------- SUPERVISED: CRY DETECTION --------
         cry_prob, is_cry, cry_confidence = cry_detector.detect_cry(audio, audio_fs)
         
-        # -------- UNSUPERVISED: ANOMALY DETECTION (FIXED VERSION) --------
+        # -------- UNSUPERVISED: ANOMALY DETECTION --------
         hour_now = time.localtime().tm_hour
         anomaly_result = anomaly_detector.detect_anomaly(
             hour=hour_now,
@@ -926,6 +1064,21 @@ if st.session_state.run:
         # Override is_anomaly based on sensitivity
         if anomaly_result['confidence'] >= anomaly_threshold:
             anomaly_result['is_anomaly'] = True
+
+        # Send alert if needed
+        if is_cry or anomaly_result['is_anomaly']:
+            try:
+                # Validate payload before sending
+                payload = {
+                    "is_cry": bool(is_cry),
+                    "is_anomaly": bool(anomaly_result['is_anomaly']),
+                    "severity": validate_and_sanitize(anomaly_result['severity'], 'str')
+                }
+                # Use environment variable for URL
+                alert_url = os.getenv('ALERT_URL', 'http://localhost:1880/baby-alert')
+                requests.post(alert_url, json=payload, timeout=0.1)
+            except Exception as e:
+                pass  # Prevents app from crashing if Node-RED is closed
         
         # -------- UPDATE HISTORY --------
         current_time = time.time()
@@ -989,14 +1142,16 @@ if st.session_state.run:
             
             with cols[1]:
                 for exp in anomaly_result['explanations']:
-                    if '✅' in exp:
-                        st.success(exp)
-                    elif '🚨' in exp or '🔊' in exp or '🌙' in exp:
-                        st.error(exp)
-                    elif '⚠️' in exp:
-                        st.warning(exp)
+                    # Sanitize explanation for display
+                    safe_exp = validate_and_sanitize(exp, 'str')
+                    if '✅' in safe_exp:
+                        st.success(safe_exp)
+                    elif '🚨' in safe_exp or '🔊' in safe_exp or '🌙' in safe_exp:
+                        st.error(safe_exp)
+                    elif '⚠️' in safe_exp:
+                        st.warning(safe_exp)
                     else:
-                        st.info(exp)
+                        st.info(safe_exp)
         
         # -------- OVERALL STATUS --------
         if anomaly_result['is_anomaly'] and is_cry:
@@ -1035,26 +1190,7 @@ if not st.session_state.run:
     st.success("🛑 Monitoring stopped")
     
     # Show summary if we have data
-    if len(st.session_state.sound_history) > 0:
-        st.subheader("📈 Session Summary")
-        col_sum1, col_sum2, col_sum3, col_sum4 = st.columns(4)
-        
-        with col_sum1:
-            avg_sound = np.mean(list(st.session_state.sound_history))
-            st.metric("Avg Sound Level", f"{avg_sound:.1f}/100")
-        
-        with col_sum2:
-            avg_move = np.mean(list(st.session_state.move_history))
-            st.metric("Avg Movement", f"{avg_move:.1f}")
-        
-        with col_sum3:
-            cry_events = sum(1 for c in list(st.session_state.cry_history) if c > 0.8)
-            st.metric("Cry Events", cry_events)
-        
-        with col_sum4:
-            anomaly_pct = sum(1 for a in anomaly_detector.reading_history) / max(len(st.session_state.sound_history), 1) * 100
-            st.metric("Anomaly %", f"{anomaly_pct:.1f}%")
-
+    if len(st.session_state.sound_history
 
 
 
