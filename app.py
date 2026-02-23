@@ -1190,7 +1190,7 @@ if not st.session_state.run:
     st.success("🛑 Monitoring stopped")
     
     # Show summary if we have data
-    if len(st.session_state.sound_history
+    if len(st.session_state.sound_history)
 
 
 
